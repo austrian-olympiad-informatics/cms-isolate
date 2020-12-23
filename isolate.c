@@ -799,6 +799,7 @@ box_inside(char **args)
     ALLOW_SYSCALL(sched_yield),
     ALLOW_SYSCALL(clock_nanosleep),
     ALLOW_SYSCALL(fchmodat),
+    ALLOW_SYSCALL(getdents),
 
     // /bin/sh jar cf
     ALLOW_SYSCALL(getgid),

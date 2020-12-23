@@ -703,7 +703,7 @@ setup_rlimits(void)
 	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW)
 
 #define KILL_PROCESS \
-	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_LOG)  // LOG for dmesg output
+	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_KILL)  // LOG for dmesg output
 
 static int
 box_inside(char **args)

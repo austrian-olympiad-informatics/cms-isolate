@@ -25,6 +25,14 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <stddef.h>
+#include <signal.h>
+#include <sys/prctl.h>
+#include <linux/unistd.h>
+#include <linux/audit.h>
+#include <linux/filter.h>
+#include <linux/seccomp.h>
+
 /* May not be defined in older glibc headers */
 #ifndef MS_PRIVATE
 #warning "Working around old glibc: no MS_PRIVATE"
@@ -91,6 +99,7 @@ int box_id;
 static char box_dir[1024];
 static pid_t box_pid;
 static pid_t proxy_pid;
+static char *apparmor_profile = NULL;
 
 uid_t box_uid;
 gid_t box_gid;
@@ -666,10 +675,53 @@ setup_rlimits(void)
 #undef RLIM
 }
 
+#define syscall_nr (offsetof(struct seccomp_data, nr))
+#define arch_nr (offsetof(struct seccomp_data, arch))
+
+#if defined(__i386__)
+# define REG_SYSCALL	REG_EAX
+# define ARCH_NR	AUDIT_ARCH_I386
+#elif defined(__x86_64__)
+# define REG_SYSCALL	REG_RAX
+# define ARCH_NR	AUDIT_ARCH_X86_64
+#else
+# warning "Platform does not support seccomp filter yet"
+# define REG_SYSCALL	0
+# define ARCH_NR	0
+#endif
+
+#define VALIDATE_ARCHITECTURE \
+	BPF_STMT(BPF_LD+BPF_W+BPF_ABS, arch_nr), \
+	BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, ARCH_NR, 1, 0), \
+	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_KILL)
+
+#define EXAMINE_SYSCALL \
+	BPF_STMT(BPF_LD+BPF_W+BPF_ABS, syscall_nr)
+
+#define ALLOW_SYSCALL(name) \
+	BPF_JUMP(BPF_JMP+BPF_JEQ+BPF_K, __NR_##name, 0, 1), \
+	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_ALLOW)
+
+#define KILL_PROCESS \
+	BPF_STMT(BPF_RET+BPF_K, SECCOMP_RET_LOG)  // LOG for dmesg output
+
 static int
 box_inside(char **args)
 {
   cg_enter();
+
+  if (apparmor_profile != NULL) {
+    int fd = open("/proc/self/attr/exec", O_WRONLY);
+    if (fd == -1)
+      die("AppArmor open %s", strerror(errno));
+    char buffer[512];
+    sprintf(buffer, "exec %s", apparmor_profile);
+    int res = write(fd, buffer, strlen(buffer));
+    if (res != strlen(buffer))
+      die("AppArmor write");
+    close(fd);
+  }
+
   setup_root();
   setup_rlimits();
   setup_credentials();
@@ -678,6 +730,95 @@ box_inside(char **args)
 
   if (set_cwd && chdir(set_cwd))
     die("chdir: %m");
+
+  struct sock_filter filter[] = {
+    VALIDATE_ARCHITECTURE,
+    EXAMINE_SYSCALL,
+    ALLOW_SYSCALL(rt_sigreturn),
+    ALLOW_SYSCALL(exit_group),
+    ALLOW_SYSCALL(exit),
+    ALLOW_SYSCALL(read),
+    ALLOW_SYSCALL(write),
+    ALLOW_SYSCALL(fstat),
+    ALLOW_SYSCALL(brk),
+    ALLOW_SYSCALL(ioctl),
+    ALLOW_SYSCALL(uname),
+    ALLOW_SYSCALL(readlink),
+    ALLOW_SYSCALL(arch_prctl),
+    ALLOW_SYSCALL(mmap),
+    ALLOW_SYSCALL(mprotect),
+    ALLOW_SYSCALL(munmap),
+    ALLOW_SYSCALL(lseek),
+    ALLOW_SYSCALL(rt_sigprocmask),
+    ALLOW_SYSCALL(rt_sigaction),
+    ALLOW_SYSCALL(close),
+    ALLOW_SYSCALL(execve),
+
+    // gcc
+    ALLOW_SYSCALL(wait4),
+    ALLOW_SYSCALL(openat),
+    ALLOW_SYSCALL(open),
+    ALLOW_SYSCALL(pread64),
+    ALLOW_SYSCALL(access),
+    ALLOW_SYSCALL(lstat),
+    ALLOW_SYSCALL(getcwd),
+    ALLOW_SYSCALL(prlimit64),
+    ALLOW_SYSCALL(stat),
+    ALLOW_SYSCALL(pipe),
+    ALLOW_SYSCALL(getpid),
+    ALLOW_SYSCALL(vfork),
+    ALLOW_SYSCALL(unlink),
+    ALLOW_SYSCALL(pipe2),
+    ALLOW_SYSCALL(dup2),
+    ALLOW_SYSCALL(fcntl),
+    ALLOW_SYSCALL(sysinfo),
+    ALLOW_SYSCALL(chmod),
+    ALLOW_SYSCALL(umask),
+    ALLOW_SYSCALL(getrusage),
+    ALLOW_SYSCALL(set_robust_list),
+    ALLOW_SYSCALL(madvise),
+    ALLOW_SYSCALL(sched_getaffinity),
+    ALLOW_SYSCALL(futex),
+    ALLOW_SYSCALL(set_tid_address),
+
+    // javac
+    ALLOW_SYSCALL(clone),
+    ALLOW_SYSCALL(clock_getres),
+    ALLOW_SYSCALL(geteuid),
+    ALLOW_SYSCALL(socket),
+    ALLOW_SYSCALL(connect),
+    ALLOW_SYSCALL(gettid),
+    ALLOW_SYSCALL(prctl),
+    ALLOW_SYSCALL(getuid),
+    ALLOW_SYSCALL(getdents64),
+    ALLOW_SYSCALL(dup),
+    ALLOW_SYSCALL(socketpair),
+    ALLOW_SYSCALL(setsockopt),
+    ALLOW_SYSCALL(getsockopt),
+    ALLOW_SYSCALL(getsockname),
+    ALLOW_SYSCALL(sched_yield),
+    ALLOW_SYSCALL(clock_nanosleep),
+
+    // /bin/sh jar cf
+    ALLOW_SYSCALL(getgid),
+    ALLOW_SYSCALL(getppid),
+    ALLOW_SYSCALL(getegid),
+    ALLOW_SYSCALL(statfs),
+    ALLOW_SYSCALL(rename),
+
+    // java
+    ALLOW_SYSCALL(dup3),
+
+    KILL_PROCESS,
+  };
+  struct sock_fprog prog = {
+    .len = (unsigned short)(sizeof(filter)/sizeof(filter[0])),
+    .filter = filter,
+  };
+  if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0))
+    die("PR_SET_NO_NEW_PRIVS failed");
+  if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog))
+    die("PR_SET_SECCOMP failed");
 
   execve(args[0], args, env);
   die("execve(\"%s\"): %m", args[0]);
@@ -993,6 +1134,7 @@ static const struct option long_opts[] = {
   { "verbose",		0, NULL, 'v' },
   { "version",		0, NULL, OPT_VERSION },
   { "wall-time",	1, NULL, 'w' },
+  { "aa-profile",	1, NULL, 'a' },
   { NULL,		0, NULL, 0 }
 };
 
@@ -1131,6 +1273,10 @@ main(int argc, char **argv)
       case OPT_TTY_HACK:
 	tty_hack = 1;
 	break;
+      case 'a':
+  apparmor_profile = optarg;
+  break;
+
       default:
 	usage(NULL);
       }

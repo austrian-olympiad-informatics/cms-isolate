@@ -1,0 +1,42 @@
+# Last Modified: Thu Dec 17 17:50:03 2020
+include <tunables/global>
+
+# vim:syntax=apparmor
+# AppArmor policy for cmscompile
+# ###AUTHOR###
+# ###COPYRIGHT###
+# ###COMMENT###
+# No template variables specified
+
+
+profile cmscompile flags=(complain,chroot_relative) {
+  include <abstractions/base>
+
+  network inet stream,
+  network inet6 stream,
+
+  /etc/java-*/** r,
+  /etc/nsswitch.conf r,
+  /etc/passwd r,
+  /etc/timezone r,
+  /tmp/ r,
+  /tmp/*.cpp r,
+  /tmp/*.h r,
+  /tmp/*.java r,
+  /usr/bin/as mrix,
+  /usr/bin/jar mrix,
+  /usr/bin/ld mrix,
+  /usr/bin/x86_64-linux-gnu-as mrix,
+  /usr/bin/x86_64-linux-gnu-ld.bfd mrix,
+  /usr/include/** r,
+  /usr/lib/gcc/x86_64-linux-gnu/10/cc1plus mrix,
+  /usr/lib/gcc/x86_64-linux-gnu/10/collect2 mrix,
+  /usr/lib/jvm/java-*/lib/**.jsa mr,
+  /usr/lib/jvm/java-11-openjdk-amd64/bin/jar mrix,
+  /usr/share/java/*.jar r,
+  @{PROC}/@{pid}/mountinfo r,
+  @{PROC}/@{pid}/net/if_inet6 r,
+  @{PROC}/@{pid}/net/ipv6_route r,
+  owner /tmp/* rw,
+
+}

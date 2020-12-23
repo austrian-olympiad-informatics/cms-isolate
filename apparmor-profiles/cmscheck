@@ -1,0 +1,19 @@
+# Last Modified: Thu Dec 17 17:30:46 2020
+include <tunables/global>
+
+# vim:syntax=apparmor
+# AppArmor policy for cmscheck
+# ###AUTHOR###
+# ###COPYRIGHT###
+# ###COMMENT###
+# No template variables specified
+
+
+profile cmscheck flags=(complain,chroot_relative) {
+  include <abstractions/base>
+
+  /tmp/correct_output.txt r,
+  /tmp/input.txt r,
+  /tmp/user_output.txt r,
+
+}

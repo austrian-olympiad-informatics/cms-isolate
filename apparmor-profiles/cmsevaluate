@@ -1,0 +1,19 @@
+# Last Modified: Thu Dec 17 17:46:41 2020
+include <tunables/global>
+
+# vim:syntax=apparmor
+# AppArmor policy for cmsevaluate
+# ###AUTHOR###
+# ###COPYRIGHT###
+# ###COMMENT###
+# No template variables specified
+
+
+profile cmsevaluate flags=(complain,chroot_relative) {
+  include <abstractions/base>
+
+  /tmp/* r,
+  /usr/lib/jvm/java-*/lib/**.jsa mr,
+  /usr/share/java/*.jar r,
+  @{PROC}/@{pid}/mountinfo r,
+}

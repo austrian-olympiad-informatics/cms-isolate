@@ -9,7 +9,7 @@ include <tunables/global>
 # No template variables specified
 
 
-profile cmscheck flags=(complain,chroot_relative) {
+profile cmscheck flags=(chroot_relative) {
   include <abstractions/base>
 
   /tmp/correct_output.txt r,

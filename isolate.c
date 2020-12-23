@@ -800,6 +800,7 @@ box_inside(char **args)
     ALLOW_SYSCALL(clock_nanosleep),
     ALLOW_SYSCALL(fchmodat),
     ALLOW_SYSCALL(getdents),
+    ALLOW_SYSCALL(newfstatat),
 
     // /bin/sh jar cf
     ALLOW_SYSCALL(getgid),

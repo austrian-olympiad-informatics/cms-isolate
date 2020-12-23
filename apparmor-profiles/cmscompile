@@ -32,7 +32,7 @@ profile cmscompile flags=(complain,chroot_relative) {
   /usr/lib/gcc/x86_64-linux-gnu/*/cc1plus mrix,
   /usr/lib/gcc/x86_64-linux-gnu/*/collect2 mrix,
   /usr/lib/jvm/java-*/lib/**.jsa mr,
-  /usr/lib/jvm/java-11-openjdk-amd64/bin/jar mrix,
+  /usr/lib/jvm/java-*/bin/jar mrix,
   /usr/share/java/*.jar r,
   @{PROC}/@{pid}/mountinfo r,
   @{PROC}/@{pid}/net/if_inet6 r,

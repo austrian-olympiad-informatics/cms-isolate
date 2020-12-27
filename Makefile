@@ -23,6 +23,7 @@ DATADIR = $(DATAROOTDIR)
 MANDIR = $(DATADIR)/man
 MAN1DIR = $(MANDIR)/man1
 BOXDIR = $(VARPREFIX)/lib/isolate
+AADIR = /etc/apparmor.d
 
 isolate: isolate.o util.o rules.o cg.o config.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LIBS)
@@ -46,7 +47,19 @@ clean:
 	rm -f isolate isolate.1 isolate.1.html
 	rm -f docbook-xsl.css
 
-install: isolate isolate-check-environment
+$(AADIR)/cmscompile: apparmor-profiles/cmscompile
+	install -m 644 $< $(AADIR)
+	apparmor_parser -Kr $@
+
+$(AADIR)/cmsevaluate: apparmor-profiles/cmsevaluate
+	install -m 644 $< $(AADIR)
+	apparmor_parser -Kr $@
+
+$(AADIR)/cmscheck: apparmor-profiles/cmscheck
+	install -m 644 $< $(AADIR)
+	apparmor_parser -Kr $@
+
+install: isolate isolate-check-environment $(AADIR)/cmscompile $(AADIR)/cmsevaluate $(AADIR)/cmscheck
 	install -d $(BINDIR) $(BOXDIR) $(CONFIGDIR)
 	install isolate-check-environment $(BINDIR)
 	install -m 4755 isolate $(BINDIR)

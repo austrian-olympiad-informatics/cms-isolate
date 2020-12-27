@@ -29,27 +29,24 @@ typedef enum {
   CG_PARENT = 256,
 } cg_controller;
 
-static const struct cg_controller_desc cg_controllers[CG_NUM_CONTROLLERS+1] = {
-  [CG_MEMORY]  = { "memory",  0 },
-  [CG_CPUACCT] = { "cpuacct", 0 },
-  [CG_CPUSET]  = { "cpuset",  1 },
-  [CG_NUM_CONTROLLERS] = { NULL, 0 },
+static const struct cg_controller_desc cg_controllers[CG_NUM_CONTROLLERS + 1] =
+    {
+        [CG_MEMORY] = {"memory", 0},
+        [CG_CPUACCT] = {"cpuacct", 0},
+        [CG_CPUSET] = {"cpuset", 1},
+        [CG_NUM_CONTROLLERS] = {NULL, 0},
 };
 
-#define FOREACH_CG_CONTROLLER(_controller) \
-  for (cg_controller (_controller) = 0; \
-       (_controller) < CG_NUM_CONTROLLERS; (_controller)++)
+#define FOREACH_CG_CONTROLLER(_controller)                                     \
+  for (cg_controller(_controller) = 0; (_controller) < CG_NUM_CONTROLLERS;     \
+       (_controller)++)
 
-static const char *
-cg_controller_name(cg_controller c)
-{
+static const char *cg_controller_name(cg_controller c) {
   assert(c < CG_NUM_CONTROLLERS);
   return cg_controllers[c].name;
 }
 
-static int
-cg_controller_optional(cg_controller c)
-{
+static int cg_controller_optional(cg_controller c) {
   assert(c < CG_NUM_CONTROLLERS);
   return cg_controllers[c].optional;
 }
@@ -59,48 +56,40 @@ static char cg_parent_name[256];
 
 #define CG_BUFSIZE 1024
 
-static void
-cg_makepath(char *buf, size_t len, cg_controller c, const char *attr)
-{
-  snprintf(buf, len, "%s/%s/%s/%s",
-    cf_cg_root,
-    cg_controller_name(c & ~CG_PARENT),
-    (c & CG_PARENT) ? cg_parent_name : cg_name,
-    attr);
+static void cg_makepath(char *buf, size_t len, cg_controller c,
+                        const char *attr) {
+  snprintf(buf, len, "%s/%s/%s/%s", cf_cg_root,
+           cg_controller_name(c & ~CG_PARENT),
+           (c & CG_PARENT) ? cg_parent_name : cg_name, attr);
 }
 
-static int
-cg_read(cg_controller controller, const char *attr, char *buf)
-{
+static int cg_read(cg_controller controller, const char *attr, char *buf) {
   int result = 0;
   int maybe = 0;
-  if (attr[0] == '?')
-    {
-      attr++;
-      maybe = 1;
-    }
+  if (attr[0] == '?') {
+    attr++;
+    maybe = 1;
+  }
 
   char path[256];
   cg_makepath(path, sizeof(path), controller, attr);
 
   int fd = open(path, O_RDONLY);
-  if (fd < 0)
-    {
-      if (maybe)
-	goto fail;
-      die("Cannot read %s: %m", path);
-    }
+  if (fd < 0) {
+    if (maybe)
+      goto fail;
+    die("Cannot read %s: %m", path);
+  }
 
   int n = read(fd, buf, CG_BUFSIZE);
-  if (n < 0)
-    {
-      if (maybe)
-	goto fail_close;
-      die("Cannot read %s: %m", path);
-    }
+  if (n < 0) {
+    if (maybe)
+      goto fail_close;
+    die("Cannot read %s: %m", path);
+  }
   if (n >= CG_BUFSIZE - 1)
     die("Attribute %s too long", path);
-  if (n > 0 && buf[n-1] == '\n')
+  if (n > 0 && buf[n - 1] == '\n')
     n--;
   buf[n] = 0;
 
@@ -114,15 +103,13 @@ fail:
   return result;
 }
 
-static void __attribute__((format(printf,3,4)))
-cg_write(cg_controller controller, const char *attr, const char *fmt, ...)
-{
+static void __attribute__((format(printf, 3, 4)))
+cg_write(cg_controller controller, const char *attr, const char *fmt, ...) {
   int maybe = 0;
-  if (attr[0] == '?')
-    {
-      attr++;
-      maybe = 1;
-    }
+  if (attr[0] == '?') {
+    attr++;
+    maybe = 1;
+  }
 
   va_list args;
   va_start(args, fmt);
@@ -139,22 +126,20 @@ cg_write(cg_controller controller, const char *attr, const char *fmt, ...)
   cg_makepath(path, sizeof(path), controller, attr);
 
   int fd = open(path, O_WRONLY | O_TRUNC);
-  if (fd < 0)
-    {
-      if (maybe)
-	goto fail;
-      else
-	die("Cannot write %s: %m", path);
-    }
+  if (fd < 0) {
+    if (maybe)
+      goto fail;
+    else
+      die("Cannot write %s: %m", path);
+  }
 
   int written = write(fd, buf, n);
-  if (written < 0)
-    {
-      if (maybe)
-	goto fail_close;
-      else
-	die("Cannot set %s to %s: %m", path, buf);
-    }
+  if (written < 0) {
+    if (maybe)
+      goto fail_close;
+    else
+      die("Cannot set %s to %s: %m", path, buf);
+  }
   if (written != n)
     die("Short write to %s (%d out of %d bytes)", path, written, n);
 
@@ -164,31 +149,24 @@ fail:
   va_end(args);
 }
 
-void
-cg_init(void)
-{
+void cg_init(void) {
   if (!cg_enable)
     return;
 
   if (!dir_exists(cf_cg_root))
     die("Control group filesystem at %s not mounted", cf_cg_root);
 
-  if (cf_cg_parent)
-    {
-      snprintf(cg_name, sizeof(cg_name), "%s/box-%d", cf_cg_parent, box_id);
-      snprintf(cg_parent_name, sizeof(cg_parent_name), "%s", cf_cg_parent);
-    }
-  else
-    {
-      snprintf(cg_name, sizeof(cg_name), "box-%d", box_id);
-      strcpy(cg_parent_name, ".");
-    }
+  if (cf_cg_parent) {
+    snprintf(cg_name, sizeof(cg_name), "%s/box-%d", cf_cg_parent, box_id);
+    snprintf(cg_parent_name, sizeof(cg_parent_name), "%s", cf_cg_parent);
+  } else {
+    snprintf(cg_name, sizeof(cg_name), "box-%d", box_id);
+    strcpy(cg_parent_name, ".");
+  }
   msg("Using control group %s under parent %s\n", cg_name, cg_parent_name);
 }
 
-void
-cg_prepare(void)
-{
+void cg_prepare(void) {
   if (!cg_enable)
     return;
 
@@ -196,19 +174,17 @@ cg_prepare(void)
   char buf[CG_BUFSIZE];
   char path[256];
 
-  FOREACH_CG_CONTROLLER(controller)
-    {
-      cg_makepath(path, sizeof(path), controller, "");
-      if (stat(path, &st) >= 0 || errno != ENOENT)
-	{
-	  msg("Control group %s already exists, trying to empty it.\n", path);
-	  if (rmdir(path) < 0)
-	    die("Failed to reset control group %s: %m", path);
-	}
-
-      if (mkdir(path, 0777) < 0 && !cg_controller_optional(controller))
-	die("Failed to create control group %s: %m", path);
+  FOREACH_CG_CONTROLLER(controller) {
+    cg_makepath(path, sizeof(path), controller, "");
+    if (stat(path, &st) >= 0 || errno != ENOENT) {
+      msg("Control group %s already exists, trying to empty it.\n", path);
+      if (rmdir(path) < 0)
+        die("Failed to reset control group %s: %m", path);
     }
+
+    if (mkdir(path, 0777) < 0 && !cg_controller_optional(controller))
+      die("Failed to create control group %s: %m", path);
+  }
 
   // If the cpuset module is enabled, set up allowed cpus and memory nodes.
   // If per-box configuration exists, use it; otherwise, inherit the settings
@@ -220,38 +196,34 @@ cg_prepare(void)
     cg_write(CG_CPUSET, "cpuset.mems", "%s", cf->mems ? cf->mems : buf);
 }
 
-void
-cg_enter(void)
-{
+void cg_enter(void) {
   if (!cg_enable)
     return;
 
   msg("Entering control group %s\n", cg_name);
 
-  FOREACH_CG_CONTROLLER(controller)
-    {
-      if (cg_controller_optional(controller))
-	cg_write(controller, "?tasks", "%d\n", (int) getpid());
-      else
-	cg_write(controller, "tasks", "%d\n", (int) getpid());
-    }
+  FOREACH_CG_CONTROLLER(controller) {
+    if (cg_controller_optional(controller))
+      cg_write(controller, "?tasks", "%d\n", (int)getpid());
+    else
+      cg_write(controller, "tasks", "%d\n", (int)getpid());
+  }
 
-  if (cg_memory_limit)
-    {
-      cg_write(CG_MEMORY, "memory.limit_in_bytes", "%lld\n", (long long) cg_memory_limit << 10);
-      cg_write(CG_MEMORY, "?memory.memsw.limit_in_bytes", "%lld\n", (long long) cg_memory_limit << 10);
-      cg_write(CG_MEMORY, "memory.max_usage_in_bytes", "0\n");
-      cg_write(CG_MEMORY, "?memory.memsw.max_usage_in_bytes", "0\n");
-      cg_write(CG_MEMORY, "memory.swappiness", "0\n");
-    }
+  if (cg_memory_limit) {
+    cg_write(CG_MEMORY, "memory.limit_in_bytes", "%lld\n",
+             (long long)cg_memory_limit << 10);
+    cg_write(CG_MEMORY, "?memory.memsw.limit_in_bytes", "%lld\n",
+             (long long)cg_memory_limit << 10);
+    cg_write(CG_MEMORY, "memory.max_usage_in_bytes", "0\n");
+    cg_write(CG_MEMORY, "?memory.memsw.max_usage_in_bytes", "0\n");
+    cg_write(CG_MEMORY, "memory.swappiness", "0\n");
+  }
 
   if (cg_timing)
     cg_write(CG_CPUACCT, "cpuacct.usage", "0\n");
 }
 
-int
-cg_get_run_time_ms(void)
-{
+int cg_get_run_time_ms(void) {
   if (!cg_enable)
     return 0;
 
@@ -261,68 +233,60 @@ cg_get_run_time_ms(void)
   return ns / 1000000;
 }
 
-void
-cg_stats(void)
-{
+void cg_stats(void) {
   if (!cg_enable)
     return;
 
   char buf[CG_BUFSIZE];
 
   // Memory usage statistics
-  unsigned long long mem=0, memsw=0;
+  unsigned long long mem = 0, memsw = 0;
   if (cg_read(CG_MEMORY, "?memory.max_usage_in_bytes", buf))
     mem = atoll(buf);
-  if (cg_read(CG_MEMORY, "?memory.memsw.max_usage_in_bytes", buf))
-    {
-      memsw = atoll(buf);
-      if (memsw > mem)
-	mem = memsw;
-    }
+  if (cg_read(CG_MEMORY, "?memory.memsw.max_usage_in_bytes", buf)) {
+    memsw = atoll(buf);
+    if (memsw > mem)
+      mem = memsw;
+  }
   if (mem)
     meta_printf("cg-mem:%lld\n", mem >> 10);
 
   // OOM kill detection
-  if (cg_read(CG_MEMORY, "?memory.oom_control", buf))
-    {
-      int oom_killed = 0;
-      char *s = buf;
-      while (s)
-	{
-	  if (sscanf(s, "oom_kill %d", &oom_killed) == 1 && oom_killed)
-	    {
-	      meta_printf("cg-oom-killed:1\n");
-	      break;
-	    }
-	  s = strchr(s, '\n');
-	  if (s)
-	    s++;
-	}
+  if (cg_read(CG_MEMORY, "?memory.oom_control", buf)) {
+    int oom_killed = 0;
+    char *s = buf;
+    while (s) {
+      if (sscanf(s, "oom_kill %d", &oom_killed) == 1 && oom_killed) {
+        meta_printf("cg-oom-killed:1\n");
+        break;
+      }
+      s = strchr(s, '\n');
+      if (s)
+        s++;
     }
+  }
 }
 
-void
-cg_remove(void)
-{
+void cg_remove(void) {
   char buf[CG_BUFSIZE];
 
   if (!cg_enable)
     return;
 
-  FOREACH_CG_CONTROLLER(controller)
-    {
-      // The cgroup can be non-existent at this moment (e.g., --cleanup before the first --init)
-      if (!cg_read(controller, "?tasks", buf))
-	continue;
+  FOREACH_CG_CONTROLLER(controller) {
+    // The cgroup can be non-existent at this moment (e.g., --cleanup before the
+    // first --init)
+    if (!cg_read(controller, "?tasks", buf))
+      continue;
 
-      if (buf[0])
-	die("Some tasks left in controller %s of cgroup %s, failed to remove it",
-	    cg_controller_name(controller), cg_name);
+    if (buf[0])
+      die("Some tasks left in controller %s of cgroup %s, failed to remove it",
+          cg_controller_name(controller), cg_name);
 
-      char path[256];
-      cg_makepath(path, sizeof(path), controller, "");
+    char path[256];
+    cg_makepath(path, sizeof(path), controller, "");
 
-      if (rmdir(path) < 0)
-	die("Cannot remove control group %s: %m", path);
-    }
+    if (rmdir(path) < 0)
+      die("Cannot remove control group %s: %m", path);
+  }
 }

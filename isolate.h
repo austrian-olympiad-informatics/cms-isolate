@@ -11,13 +11,13 @@
 
 #define NONRET __attribute__((noreturn))
 #define UNUSED __attribute__((unused))
-#define ARRAY_SIZE(a) (int)(sizeof(a)/sizeof(a[0]))
+#define ARRAY_SIZE(a) (int)(sizeof(a) / sizeof(a[0]))
 
 /* isolate.c */
 
 void die(char *msg, ...) NONRET;
-void NONRET __attribute__((format(printf,1,2))) err(char *msg, ...);
-void __attribute__((format(printf,1,2))) msg(char *msg, ...);
+void NONRET __attribute__((format(printf, 1, 2))) err(char *msg, ...);
+void __attribute__((format(printf, 1, 2))) msg(char *msg, ...);
 
 extern int pass_environ;
 extern int verbose;
@@ -43,7 +43,7 @@ void close_all_fds(void);
 
 void meta_open(const char *name);
 void meta_close(void);
-void __attribute__((format(printf,1,2))) meta_printf(const char *fmt, ...);
+void __attribute__((format(printf, 1, 2))) meta_printf(const char *fmt, ...);
 
 /* rules.c */
 

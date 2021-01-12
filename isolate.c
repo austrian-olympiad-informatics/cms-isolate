@@ -100,6 +100,7 @@ static char box_dir[1024];
 static pid_t box_pid;
 static pid_t proxy_pid;
 static char *apparmor_profile = NULL;
+static int seccomp_enabled = 0;
 
 uid_t box_uid;
 gid_t box_gid;
@@ -737,8 +738,10 @@ static int box_inside(char **args) {
   };
   if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0))
     die("PR_SET_NO_NEW_PRIVS failed");
-  if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog))
-    die("PR_SET_SECCOMP failed");
+  if (seccomp_enabled) {
+    if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &prog))
+      die("PR_SET_SECCOMP failed");
+  }
 
   execve(args[0], args, env);
   die("execve(\"%s\"): %m", args[0]);
@@ -996,6 +999,7 @@ enum opt_code {
   OPT_INHERIT_FDS,
   OPT_STDERR_TO_STDOUT,
   OPT_TTY_HACK,
+  OPT_ENABLE_SECCOMP,
 };
 
 static const char short_opts[] = "b:c:d:DeE:f:i:k:m:M:o:p::q:r:st:vw:x:";
@@ -1034,6 +1038,7 @@ static const struct option long_opts[] = {
     {"version", 0, NULL, OPT_VERSION},
     {"wall-time", 1, NULL, 'w'},
     {"aa-profile", 1, NULL, 'a'},
+    {"enable-seccomp", 0, NULL, OPT_ENABLE_SECCOMP},
     {NULL, 0, NULL, 0}};
 
 static unsigned int opt_uint(char *val) {
@@ -1168,6 +1173,9 @@ int main(int argc, char **argv) {
       break;
     case 'a':
       apparmor_profile = optarg;
+      break;
+    case OPT_ENABLE_SECCOMP:
+      seccomp_enabled = 1;
       break;
 
     default:

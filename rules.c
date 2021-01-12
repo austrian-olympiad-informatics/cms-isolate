@@ -189,9 +189,12 @@ static char *sanitize_dir_path(char *path) {
 
 static int add_dir_rule(char *in, char *out, unsigned int flags) {
   // Make sure that "in" does not try to escape the box
-  in = sanitize_dir_path(in);
-  if (!in)
-    return 0;
+  int is_root = strcmp(in, "/") == 0;
+  if (!is_root) {
+    in = sanitize_dir_path(in);
+    if (!in)
+      return 0;
+  }
 
   // Override an existing rule
   struct dir_rule *r;
@@ -203,9 +206,15 @@ static int add_dir_rule(char *in, char *out, unsigned int flags) {
   if (!r) {
     r = xmalloc(sizeof(*r));
     r->inside = in;
-    *last_dir_rule = r;
-    last_dir_rule = &r->next;
-    r->next = NULL;
+    if (is_root) {
+      r->next = first_dir_rule;
+      first_dir_rule = r;
+    } else {
+      *last_dir_rule = r;
+      last_dir_rule = &r->next;
+      r->next = NULL;
+    }
+
   }
   r->outside = out;
   r->flags = flags;
@@ -343,7 +352,11 @@ void apply_dir_rules(int with_defaults) {
     char *in = r->inside;
     char *out = r->outside;
     char root_in[1024];
-    snprintf(root_in, sizeof(root_in), "root/%s", in);
+    if (!strcmp(in, "/")) {
+      sprintf(root_in, "root");
+    } else {
+      snprintf(root_in, sizeof(root_in), "root/%s", in);
+    }
 
     if (r->flags & DIR_FLAG_TMP) {
       make_dir(out);
@@ -376,7 +389,7 @@ void apply_dir_rules(int with_defaults) {
       mount_flags |= MS_BIND | MS_NOSUID;
       if (!(r->flags & DIR_FLAG_NOREC))
         mount_flags |= MS_REC;
-      msg("Binding %s on %s (flags %lx)\n", out, in, mount_flags);
+      msg("Binding %s on %s (flags %lx)\n", out, root_in, mount_flags);
 
       /*
        *  This is tricky. We cannot run mount() with root privileges, since

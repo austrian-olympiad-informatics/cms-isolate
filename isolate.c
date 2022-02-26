@@ -135,6 +135,9 @@ static void final_stats(struct rusage *rus) {
   meta_printf("max-rss:%ld\n", rus->ru_maxrss);
   meta_printf("csw-voluntary:%ld\n", rus->ru_nvcsw);
   meta_printf("csw-forced:%ld\n", rus->ru_nivcsw);
+  // Hack: cgroup v2 doesn't have ability to get max memory use,
+  // instead use information from rusage
+  meta_printf("cg-mem:%ld\n", rus->ru_maxrss);
 
   cg_stats();
 }
@@ -813,9 +816,11 @@ static const char *self_name(void) {
 static void init(void) {
   msg("Preparing sandbox directory\n");
   if (mkdir("box", 0700) < 0) {
-    if (errno == EEXIST)
-      die("Box already exists, run `%s --cleanup' first", self_name());
-    else
+    if (errno == EEXIST) {
+      char buf[64];
+      char *cwd = getcwd(buf, sizeof(buf));
+      die("Box already exists, run `%s --cleanup' first (%s)", self_name(), cwd);
+    } else
       die("Cannot create box: %m");
   }
   if (chown("box", orig_uid, orig_gid) < 0)

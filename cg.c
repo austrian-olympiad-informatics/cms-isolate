@@ -90,6 +90,21 @@ void cg_init(void) {
   if (!dir_exists(cf_cg_root))
     die("Control group filesystem at %s not mounted", cf_cg_root);
 
+  char buffer[256];
+  snprintf(buffer, sizeof(buffer), "%s/cgroup.subtree_control", cf_cg_root);
+  int fd = open(buffer, O_WRONLY | O_TRUNC);
+  if (fd < 0) {
+    die("Cannot write %s: %m", buffer);
+  }
+
+  const char *enablestr = "+memory +cpu +cpuset";
+  int written = write(fd, enablestr, strlen(enablestr));
+  if (written < 0) {
+    die("Cannot set %s to %s: %m", buffer, "+memory +cpu +cpuset");
+  }
+  if (written != strlen(enablestr))
+    die("Short write to %s (%d out of %d bytes)", buffer, written, 20);
+
   if (cf_cg_parent) {
     snprintf(cg_name, sizeof(cg_name), "%s/box-%d", cf_cg_parent, box_id);
     snprintf(cg_parent_name, sizeof(cg_parent_name), "%s", cf_cg_parent);

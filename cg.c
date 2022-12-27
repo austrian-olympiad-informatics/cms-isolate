@@ -81,6 +81,7 @@ cg_write(const char *attr, const char *fmt, ...) {
   }
   if (written != n)
     die("Short write to %s (%d out of %d bytes)", path, written, n);
+  close(fd);
 }
 
 void cg_init(void) {
@@ -104,6 +105,7 @@ void cg_init(void) {
   }
   if (written != strlen(enablestr))
     die("Short write to %s (%d out of %d bytes)", buffer, written, 20);
+  close(fd);
 
   if (cf_cg_parent) {
     snprintf(cg_name, sizeof(cg_name), "%s/box-%d", cf_cg_parent, box_id);
@@ -205,8 +207,6 @@ void cg_remove(void) {
   cg_makepath(path, sizeof(path), "");
   cg_makepath(subpath, sizeof(subpath), "runner/");
 
-  if (rmdir(subpath) < 0)
-    die("Cannot remove control group %s: %m", subpath);
-  if (rmdir(path) < 0)
-    die("Cannot remove control group %s: %m", path);
+  rmdir(subpath);
+  rmdir(path);
 }
